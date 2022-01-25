@@ -79,7 +79,7 @@ def parse_line(line, padding):
     line = line[sp + 1:]
 
     # take element
-    if info["type"] == "E":
+    if info["type"] in ["E", "N"]:
         try:
             sp = line.index("(")
             info["value"] = line[:sp].strip()
@@ -90,8 +90,13 @@ def parse_line(line, padding):
         except Exception:
             raise ValueError("wrong format")
 
+        if info["type"] == "N":
+            key, value = info["value"].split("=")
+            info["key"] = f"xmls:{key}"
+            info["value"] = value
+
     # take attribute
-    elif info["type"] in ["A", "N"]:
+    elif info["type"] == "A":
 
         idx = line.index("=")
         info["key"] = line[:idx].strip()
@@ -176,7 +181,7 @@ def parse_xml(value):
             tree[-1].set_text(info["value"])
         elif info["type"] == "N":
             padding = True
-            n_element = (f"xmls:{info['key']}", info["value"])
+            n_element = (info['key'], info["value"])
         # else:
         #     raise ValueError(f"unknow type '{info['type']}'")
 
