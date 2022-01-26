@@ -4,17 +4,19 @@ import argparse
 import os
 import re
 
-
+ff = []
 class XmlTreeElement:
     """ xmltree implementation """
-    def __init__(self, tag, extra={}):
+    def __init__(self, tag, text=None, child=[], attrs={}, extra={}):
         self.tag = tag
         self.extra = extra
 
-        self.text = None
-        self.attributes = {}
-        self.childrens = []
-        self._unk = {}
+        self.text = text
+
+        self.attributes = {**attrs}
+        self.extra_attrs = {}
+        self.extra = {**extra}
+        self.childrens = [*child]
 
     def add_child(self, child):
         if self.text is not None:
@@ -22,17 +24,27 @@ class XmlTreeElement:
         self.childrens.append(child)
 
     def set_text(self, text):
-        if self.childrens:
+        if len(self.childrens) != 0:
             raise ValueError("error can't set text with childs")
         elif self.text:
             raise ValueError("error can't set text with text set")
         self.text = text
 
     def add_attr(self, key, value, extra={}):
-        self.extra[key] = extra
+        self.extra_attrs[key] = extra
         self.attributes[key] = value
 
+    def add_attrs(self, **attrs):
+        self.attributes.update(attrs)
+
     def to_str(self, depth=0, indentation=4):
+        global ff
+
+        if self in ff:
+            print(self.tag, self.attributes)
+            # print(self.text, self.tag, self.attributes)
+            # exit(0)
+        ff.append(self)
         spance_indentation = " " * (depth * indentation)
 
         # convert attributes
@@ -61,7 +73,16 @@ def sanitize_string(val):
     return val
 
 
-attr_reg = re.compile(r"^(http://schemas\.android\.com/apk/res/)([a-zA-Z\.:]+)\(0x[a-f0-9]+\)$")
+def sanitize_regex(val):
+    """espace special char"""
+    for c in ".?[](){}":
+        val = val.replace(c, f"\\{c}")
+    return val
+
+
+# WARNING eend url "res-auto:" or "android:" is unknow
+attr_reg = re.compile(r"^(http://schemas\.android\.com/apk/res/)([a-zA-Z\.:_\-]+)\(0x[a-f0-9]+\)$")
+attr_reg2 = re.compile(r"^(http://schemas\.android\.com/apk/res-auto:)([a-zA-Z\.:_\-]+)\(0x[a-f0-9]+\)$")
 
 
 def sanitize_android_key(val, resources):
@@ -71,20 +92,31 @@ def sanitize_android_key(val, resources):
         # 1 = path ?
         # 2 = hexa ?
         return mat.groups()[1]
+    mat = attr_reg2.match(val)
+    if mat:
+        return "app:" + mat.groups()[1]
     return val
 
 
 def sanitize_android_value(val, resources):
     val = sanitize_string(val)
-    if resources and val[0] == "@":
-        mat = re.search(r"\n    resource " + val[1:] + r" ([^\s\n]+)\n", resources)
-        if mat:
-            return "@" + mat.groups()[0]
+    # WARNING prefix "?" is unknow
+    if resources:
+        if val[0] in ["@", "?"]:
+            mat = re.search(r"\n    resource " + sanitize_regex(val[1:]) + r" ([^\s\n]+)\n", resources)
+            if mat:
+                if val[0] == "@":
+                    return "@" + mat.groups()[0]
+                return "?android:" + mat.groups()[0]
+        if val[0] == "?":
+            mat = re.search(r"\n\s{8}(.+?)\(0x[a-f0-9]+\)=" + sanitize_regex(val) + "\n", resources)
+            if mat:
+                return "?android:" + mat.groups()[0]
     return val
 
 
 elements = {
-    "E": re.compile(r"^(\s*)E: ([a-zA-Z][a-zA-Z0-9\-_]+) \(line=(\d+)\)\s*$"),
+    "E": re.compile(r"^(\s*)E: ([a-zA-Z][a-zA-Z0-9\-_\.]+) \(line=(\d+)\)\s*$"),
     "A": re.compile(r"^(\s*)A: (.+?)=(.+?)(?: \(Raw: (.+)\))?\s*$"),
     "T": re.compile(r"^(\s*)T: (.+?)$"),
     "N": re.compile(r"^(\s*)N: ([^\n\s=]+)=(.+?) \(line=(\d+)\)\s*$"),
@@ -92,7 +124,6 @@ elements = {
 
 
 def parse_line(line):
-    print(line)
     for el_type, reg in elements.items():
         mat = reg.search(line)
         if mat:
@@ -106,9 +137,9 @@ def parse_xml(value, resources=None):
     root = None
     level = 0
 
-    # unknow N: type    
-    is_android_special = False
-    n_element = None
+    # unknow N: type
+    is_android_special = 0
+    n_element = {}
 
     for pos, line in enumerate(value.split("\n"), start=1):
         if not line:
@@ -116,8 +147,7 @@ def parse_xml(value, resources=None):
 
         try:
             lvl, el_type, groups = parse_line(line)
-            if is_android_special:
-                lvl -= 2
+            lvl -= ((is_android_special % 2) * 2)
             mod = lvl % 4
             lvl //= 4
         except Exception as e:
@@ -145,8 +175,6 @@ def parse_xml(value, resources=None):
             level = lvl
             if not root:
                 root = xml_el
-                if is_android_special:
-                    root.add_attr(*n_element)
             else:
                 tree[-1].add_child(xml_el)
             tree.append(xml_el)
@@ -165,8 +193,13 @@ def parse_xml(value, resources=None):
             tree[-1].set_text(groups[0])
 
         elif el_type == "N":
-            is_android_special = True
-            n_element = (f"xmlns:{groups[0]}", sanitize_string(groups[1]))
+            if root:
+                raise ValueError("N type is aleready create")
+            is_android_special += 1
+            n_element[f"xmlns:{groups[0]}"] = sanitize_string(groups[1])
+
+    # add N attribute
+    root.add_attrs(**n_element)
 
     return root
 
@@ -209,8 +242,7 @@ def main():
 
         if flags.rename_file and resources:
             # escape . for regex
-            r_filename = filename.replace(".", "\\.")
-            mat = re.search(r"\n    resource 0x[a-f0-9]+ xml/([a-zA-Z][a-zA-Z_-]*)\n      \(\) \(file\) res/" + r_filename + " type=XML", resources)
+            mat = re.search(r"\n\s{4}resource 0x[a-f0-9]+ xml/([a-zA-Z][a-zA-Z_-]*)\n\s{6}\(\) \(file\) res/" + sanitize_regex(r_filename) + " type=XML", resources)
             if mat:
                 filename = mat.groups()[0] + ".xml"
 

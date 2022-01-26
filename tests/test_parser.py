@@ -38,33 +38,33 @@ class TestParser(unittest.TestCase):
         root = parse_xml(value)
         self.assertIsInstance(root, XmlTreeElement)
 
-        l = XmlTreeElement("list", {"line": "16"})
+        l = XmlTreeElement("list", extra={"line": "16"})
         l.add_attr("name", "carrier_config_list", extra={"Raw": "carrier_config_list"})
 
-        pbundle_as_map = XmlTreeElement("pbundle_as_map", {"line": "17"})
-        c = XmlTreeElement("string-array", {"line": "19"})
+        pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": "17"})
+        c = XmlTreeElement("string-array", extra={"line": "19"})
         c.add_attr("name", "mccmnc", extra={"Raw": "mccmnc"})
 
-        it = XmlTreeElement("item", {"line": "20"})
+        it = XmlTreeElement("item", extra={"line": "20"})
         it.add_attr("value", "TEST", extra={"Raw": "TEST"})
 
         c.add_child(it)
         pbundle_as_map.add_child(c)
         l.add_child(pbundle_as_map)
 
-        pbundle_as_map = XmlTreeElement("pbundle_as_map", {"line": "24"})
-        c = XmlTreeElement("string-array", {"line": "26"})
+        pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": "24"})
+        c = XmlTreeElement("string-array", extra={"line": "26"})
         c.add_attr("name", "mccmnc", extra={"Raw": "mccmnc"})
 
-        it = XmlTreeElement("item", {"line": "28"})
+        it = XmlTreeElement("item", extra={"line": "28"})
         it.add_attr("value", "20601")
         c.add_child(it)
 
-        it = XmlTreeElement("item", {"line": "30"})
+        it = XmlTreeElement("item", extra={"line": "30"})
         it.add_attr("value", "20810")
         c.add_child(it)
 
-        it = XmlTreeElement("item", {"line": "31"})
+        it = XmlTreeElement("item", extra={"line": "31"})
         it.add_attr("value", "20826")
         c.add_child(it)
 
@@ -136,7 +136,7 @@ class TestParser(unittest.TestCase):
         value = """  T: value="TEST" (Raw: "TEST")"""
         with self.assertRaises(ValueError):
             parse_xml(value)
-        
+
         value = """E: list (line=16)\n  T: value="TEST" (Raw: "TEST")"""
         with self.assertRaises(ValueError):
             parse_xml(value)
