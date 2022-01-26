@@ -100,7 +100,7 @@ def parse_line(line):
     raise ValueError("match nothing")
 
 
-def parse_xml(value, resources_file):
+def parse_xml(value, resources_file=None):
     tree = []
     root = None
     level = 0
