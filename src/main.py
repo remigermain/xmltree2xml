@@ -6,9 +6,10 @@ import re
 
 
 class XmlTreeElement:
-    def __init__(self, tag, **kwargs):
+    """ xmltree implementation """
+    def __init__(self, tag, extra={}):
         self.tag = tag
-        self.kwargs = kwargs
+        self.extra = extra
 
         self.text = None
         self.attributes = {}
@@ -27,8 +28,8 @@ class XmlTreeElement:
             raise ValueError("error can't set text with text set")
         self.text = text
 
-    def add_attr(self, key, value, _unk={}):
-        self._unk[key] = _unk
+    def add_attr(self, key, value, extra={}):
+        self.extra[key] = extra
         self.attributes[key] = value
 
     def to_str(self, depth=0, indentation=4):
@@ -54,87 +55,56 @@ class XmlTreeElement:
         return f"{spance_indentation}<{self.tag}{attrs}>\n{childs}\n{spance_indentation}</{self.tag}>"
 
 
-def span(line, fnc):
-    """number char span , fnc"""
-    for i, c in enumerate(line):
-        if not fnc(c):
-            return i
-    return 0
+def sanitize_string(val):
+    if val[0] == '"' and val[-1] == '"':
+        return val[1:-1]
+    return val
 
 
-def parse_line(line, padding):
-    info = {}
-    # start space
-    idx = span(line, str.isspace)
-    clc = idx
-    if padding:
-        clc += 2
-    info["level"] = clc // 4
-    info["mod"] = clc % 4
-    line = line[idx:]
-
-    # type like E:, A: ...
-    sp = line.index(":")
-    info["type"] = line[:sp]
-    line = line[sp + 1:]
-
-    # take element
-    if info["type"] in ["E", "N"]:
-        try:
-            sp = line.index("(")
-            info["value"] = line[:sp].strip()
-
-            # unknow value in parentes
-            line, pos = line[sp:].replace("(", "").replace(")", "").strip().split("=")
-            info["kwargs"] = {line.strip(): int(pos.strip())}
-        except Exception:
-            raise ValueError("wrong format")
-
-        if info["type"] == "N":
-            key, value = info["value"].split("=")
-            info["key"] = f"xmls:{key}"
-            info["value"] = value
-
-    # take attribute
-    elif info["type"] == "A":
-
-        idx = line.index("=")
-        info["key"] = line[:idx].strip()
-        line = line[idx + 1:]
-
-        info["unk"] = {}
-        if line[0] in '"':
-            # start = 1 for space "
-            idx = line.index("\"", 1)
-            info["value"] = line[:idx].replace('"', '')
-
-            line = line[idx+1:]
-
-            value = line[line.index("(Raw: "):].replace(")", "").strip()
-            info["unk"]["Raw"] = value.replace('"', "").strip()
-
-        else:
-            v = line.strip()
-            if v.isdigit():
-                v = int(v)
-            info["value"] = v
-
-        c = re.compile(r"^http://schemas\.android\.com/apk/res/([a-zA-Z\.:]+)\(0x[a-f0-9]+\)$")
-        m = c.match(info["key"])
-        if m:
-            info["key"] = m.groups()[0]
-
-    # take text value
-    elif info["type"] == "T":
-        info["value"] = line.strip().replace("'", "")
-    return info
+attr_reg = re.compile(r"^(http://schemas\.android\.com/apk/res/)([a-zA-Z\.:]+)\(0x[a-f0-9]+\)$")
 
 
-def parse_xml(value):
+def sanitize_android_key(val, resources_file):
+    mat = attr_reg.match(val)
+    if mat:
+        # 0 = url
+        # 1 = path ?
+        # 2 = hexa ?
+        return mat.groups()[1]
+    return val
+
+
+def sanitize_android_value(val, resources_file):
+    val = sanitize_string(val)
+    if resources_file and val[0] == "@":
+        mat = re.search(r"\n    resource " + val[1:] + r" ([^\s\n]+)\n", resources_file)
+        if mat:
+            return "@" + mat.groups()[0]
+    return val
+
+
+elements = {
+    "E": re.compile(r"^(\s*)E: ([a-zA-Z][a-zA-Z0-9\-_]+) \(line=(\d+)\)\s*$"),
+    "A": re.compile(r"^(\s*)A: ([^\n\s=]+)=([^\n\s=]+)(?: \(Raw: (.+)\))?\s*$"),
+    "T": re.compile(r"^(\s*)T: ([^\s\t]+)$"),
+    "N": re.compile(r"^(\s*)N: ([^\n\s=]+)=([^\n\s=]+) \(line=(\d+)\)\s*$"),
+}
+
+
+def parse_line(line):
+    for el_type, reg in elements.items():
+        mat = reg.search(line)
+        if mat:
+            result = mat.groups()
+            return len(result[0]), el_type, result[1:]
+    raise ValueError("match nothing")
+
+
+def parse_xml(value, resources_file):
     tree = []
     root = None
     level = 0
-    padding = False
+    is_android_special = False
 
     n_element = None
 
@@ -143,49 +113,58 @@ def parse_xml(value):
             continue
 
         try:
-            info = parse_line(line, padding)
+            lvl, el_type, groups = parse_line(line)
+            if is_android_special:
+                lvl -= 2
+            mod = lvl % 4
+            lvl //= 4
         except Exception as e:
             raise ValueError(f"{str(e)} in line {pos}")
 
         # check formating
-        if info["level"] > level + 1:
+        if lvl > level + 1:
             raise ValueError(f"to many indentation in line {pos}")
-        elif info["mod"] not in [0, 2]:
+        elif mod not in [0, 2]:
             raise ValueError(f"wrong indentation in line {pos}")
-        elif info["type"] == "A" and not tree:
+        elif el_type == "A" and not tree:
             raise ValueError(f"wrong format for 'A' type in line {pos}")
-        elif info["type"] == "A" and (level != info["level"] or info["mod"] != 2):
+        elif el_type == "A" and (level != lvl or mod != 2):
             raise ValueError(f"wrong indentation for 'A' type in line {pos}")
-        elif info["type"] == "T" and (level + 1 != info["level"] or info["mod"] != 0):
+        elif el_type == "T" and (level + 1 != lvl or mod != 0):
             raise ValueError(f"wrong indentation for 'T' type in line {pos}")
-        elif info["level"] == 0 and info["type"] == "E" and root:
+        elif lvl == 0 and el_type == "E" and root:
             raise ValueError(f"multiple root element in line {pos}")
 
-        if info["type"] == "E":
-            xml_el = XmlTreeElement(info["value"], **info["kwargs"])
+        if el_type == "E":
+            xml_el = XmlTreeElement(groups[0], extra={"line": sanitize_string(groups[1])})
 
-            if len(tree) > 1 and level >= info["level"]:
-                tree = tree[:info["level"]]
-            level = info["level"]
-
+            if len(tree) > 1 and level >= lvl:
+                tree = tree[:lvl]
+            level = lvl
             if not root:
                 root = xml_el
             else:
                 tree[-1].add_child(xml_el)
-
             tree.append(xml_el)
 
-        elif info["type"] == "A":
-            tree[-1].add_attr(info["key"], info["value"], _unk=info["unk"])
-        elif info["type"] == "T":
-            tree[-1].set_text(info["value"])
-        elif info["type"] == "N":
-            padding = True
-            n_element = (info['key'], info["value"])
-        # else:
-        #     raise ValueError(f"unknow type '{info['type']}'")
+        elif el_type == "A":
+            extra = {}
+            if groups[2]:
+                extra["Raw"] = sanitize_string(groups[2])
 
-    if n_element:
+            key = sanitize_android_key(groups[0], resources_file)
+            value = sanitize_android_value(groups[1], resources_file)
+
+            tree[-1].add_attr(key, value, extra=extra)
+
+        elif el_type == "T":
+            tree[-1].set_text(groups[0])
+
+        elif el_type == "N":
+            is_android_special = True
+            n_element = (f"xmlns:{groups[0]}", sanitize_string(groups[1]))
+
+    if is_android_special:
         root.add_attr(*n_element)
 
     return root
@@ -195,8 +174,10 @@ def main():
 
     p = argparse.ArgumentParser("xmltree2xml", description="convert android xmltree to classic xml.")
     p.add_argument("-n", "--no-header", help="do not add an xml header.", default=False)
+    p.add_argument("-r", "--resources-file", nargs=1, help="resource file for replace every android hexa reference to \
+        human redable reference.", default=None)
     p.add_argument("-o", "--output-dir", help="output directory.", default="output")
-    p.add_argument("file", nargs='+', help="xmltree file")
+    p.add_argument("file", nargs='+', help="xmltree file.")
     flags = p.parse_args()
 
     if not os.path.exists(flags.output_dir):
@@ -205,8 +186,13 @@ def main():
         with open(file_name, "r") as f:
             value = f.read()
 
+        resources_file = None
+        if flags.resources_file:
+            with open(flags.resources_file[0], "r") as f:
+                resources_file = f.read()
+
         try:
-            root_el = parse_xml(value)
+            root_el = parse_xml(value, resources_file)
         except Exception as e:
             raise ValueError(f"in '{file_name}': {str(e)}")
         if not root_el:

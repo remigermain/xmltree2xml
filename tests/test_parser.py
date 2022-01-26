@@ -9,9 +9,9 @@ class TestParser(unittest.TestCase):
 
         self.assertEqual(s.tag, d.tag)
         self.assertEqual(s.attributes, d.attributes)
-        self.assertEqual(s.kwargs, d.kwargs)
+        self.assertEqual(s.extra, d.extra)
         self.assertEqual(s.text, d.text)
-        self.assertEqual(s._unk, d._unk)
+        self.assertEqual(s.extra, d.extra)
         self.assertEqual(len(s.childrens), len(d.childrens))
         if s.childrens:
             for child_s, child_d in zip(s.childrens, d.childrens):
@@ -38,34 +38,34 @@ class TestParser(unittest.TestCase):
         root = parse_xml(value)
         self.assertIsInstance(root, XmlTreeElement)
 
-        l = XmlTreeElement("list", line=16)
-        l.add_attr("name", "carrier_config_list", _unk={"Raw": "carrier_config_list"})
+        l = XmlTreeElement("list", {"line": "16"})
+        l.add_attr("name", "carrier_config_list", extra={"Raw": "carrier_config_list"})
 
-        pbundle_as_map = XmlTreeElement("pbundle_as_map", line=17)
-        c = XmlTreeElement("string-array", line=19)
-        c.add_attr("name", "mccmnc", _unk={"Raw": "mccmnc"})
+        pbundle_as_map = XmlTreeElement("pbundle_as_map", {"line": "17"})
+        c = XmlTreeElement("string-array", {"line": "19"})
+        c.add_attr("name", "mccmnc", extra={"Raw": "mccmnc"})
 
-        it = XmlTreeElement("item", line=20)
-        it.add_attr("value", "TEST", _unk={"Raw": "TEST"})
+        it = XmlTreeElement("item", {"line": "20"})
+        it.add_attr("value", "TEST", extra={"Raw": "TEST"})
 
         c.add_child(it)
         pbundle_as_map.add_child(c)
         l.add_child(pbundle_as_map)
 
-        pbundle_as_map = XmlTreeElement("pbundle_as_map", line=24)
-        c = XmlTreeElement("string-array", line=26)
-        c.add_attr("name", "mccmnc", _unk={"Raw": "mccmnc"})
+        pbundle_as_map = XmlTreeElement("pbundle_as_map", {"line": "24"})
+        c = XmlTreeElement("string-array", {"line": "26"})
+        c.add_attr("name", "mccmnc", extra={"Raw": "mccmnc"})
 
-        it = XmlTreeElement("item", line=28)
-        it.add_attr("value", 20601)
+        it = XmlTreeElement("item", {"line": "28"})
+        it.add_attr("value", "20601")
         c.add_child(it)
 
-        it = XmlTreeElement("item", line=30)
-        it.add_attr("value", 20810)
+        it = XmlTreeElement("item", {"line": "30"})
+        it.add_attr("value", "20810")
         c.add_child(it)
 
-        it = XmlTreeElement("item", line=31)
-        it.add_attr("value", 20826)
+        it = XmlTreeElement("item", {"line": "31"})
+        it.add_attr("value", "20826")
         c.add_child(it)
 
         pbundle_as_map.add_child(c)
