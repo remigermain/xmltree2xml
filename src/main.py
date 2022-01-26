@@ -64,7 +64,7 @@ def sanitize_string(val):
 attr_reg = re.compile(r"^(http://schemas\.android\.com/apk/res/)([a-zA-Z\.:]+)\(0x[a-f0-9]+\)$")
 
 
-def sanitize_android_key(val, resources_file):
+def sanitize_android_key(val, resources):
     mat = attr_reg.match(val)
     if mat:
         # 0 = url
@@ -74,10 +74,10 @@ def sanitize_android_key(val, resources_file):
     return val
 
 
-def sanitize_android_value(val, resources_file):
+def sanitize_android_value(val, resources):
     val = sanitize_string(val)
-    if resources_file and val[0] == "@":
-        mat = re.search(r"\n    resource " + val[1:] + r" ([^\s\n]+)\n", resources_file)
+    if resources and val[0] == "@":
+        mat = re.search(r"\n    resource " + val[1:] + r" ([^\s\n]+)\n", resources)
         if mat:
             return "@" + mat.groups()[0]
     return val
@@ -85,13 +85,14 @@ def sanitize_android_value(val, resources_file):
 
 elements = {
     "E": re.compile(r"^(\s*)E: ([a-zA-Z][a-zA-Z0-9\-_]+) \(line=(\d+)\)\s*$"),
-    "A": re.compile(r"^(\s*)A: ([^\n\s=]+)=([^\n\s=]+)(?: \(Raw: (.+)\))?\s*$"),
-    "T": re.compile(r"^(\s*)T: ([^\s\t]+)$"),
-    "N": re.compile(r"^(\s*)N: ([^\n\s=]+)=([^\n\s=]+) \(line=(\d+)\)\s*$"),
+    "A": re.compile(r"^(\s*)A: (.+?)=(.+?)(?: \(Raw: (.+)\))?\s*$"),
+    "T": re.compile(r"^(\s*)T: (.+?)$"),
+    "N": re.compile(r"^(\s*)N: ([^\n\s=]+)=(.+?) \(line=(\d+)\)\s*$"),
 }
 
 
 def parse_line(line):
+    print(line)
     for el_type, reg in elements.items():
         mat = reg.search(line)
         if mat:
@@ -100,12 +101,13 @@ def parse_line(line):
     raise ValueError("match nothing")
 
 
-def parse_xml(value, resources_file=None):
+def parse_xml(value, resources=None):
     tree = []
     root = None
     level = 0
-    is_android_special = False
 
+    # unknow N: type    
+    is_android_special = False
     n_element = None
 
     for pos, line in enumerate(value.split("\n"), start=1):
@@ -143,6 +145,8 @@ def parse_xml(value, resources_file=None):
             level = lvl
             if not root:
                 root = xml_el
+                if is_android_special:
+                    root.add_attr(*n_element)
             else:
                 tree[-1].add_child(xml_el)
             tree.append(xml_el)
@@ -152,8 +156,8 @@ def parse_xml(value, resources_file=None):
             if groups[2]:
                 extra["Raw"] = sanitize_string(groups[2])
 
-            key = sanitize_android_key(groups[0], resources_file)
-            value = sanitize_android_value(groups[1], resources_file)
+            key = sanitize_android_key(groups[0], resources)
+            value = sanitize_android_value(groups[1], resources)
 
             tree[-1].add_attr(key, value, extra=extra)
 
@@ -164,53 +168,61 @@ def parse_xml(value, resources_file=None):
             is_android_special = True
             n_element = (f"xmlns:{groups[0]}", sanitize_string(groups[1]))
 
-    if is_android_special:
-        root.add_attr(*n_element)
-
     return root
 
 
 def main():
 
     p = argparse.ArgumentParser("xmltree2xml", description="convert android xmltree to classic xml.")
-    p.add_argument("-n", "--no-header", help="do not add an xml header.", default=False)
-    p.add_argument("-r", "--resources-file", nargs=1, help="resource file for replace every android hexa reference to \
-        human redable reference.", default=None)
+    p.add_argument("-n", "--no-header", help="do not add an xml header.", action="store_true", default=False)
+    p.add_argument("-r", "--resources", nargs=1, help="resource file for replace every hexa reference to human redable reference.", default=None)
     p.add_argument("-o", "--output-dir", help="output directory.", default="output")
+    p.add_argument("-f", "--rename-file", help="rename output file with resource name.", action="store_true", default=False)
     p.add_argument("file", nargs='+', help="xmltree file.")
     flags = p.parse_args()
 
     if not os.path.exists(flags.output_dir):
         os.mkdir(flags.output_dir)
-    for file_name in flags.file:
-        with open(file_name, "r") as f:
+    for filename in flags.file:
+        with open(filename, "r") as f:
             value = f.read()
 
-        resources_file = None
-        if flags.resources_file:
-            with open(flags.resources_file[0], "r") as f:
-                resources_file = f.read()
+        resources = None
+        if flags.resources:
+            with open(flags.resources[0], "r") as f:
+                resources = f.read()
 
         try:
-            root_el = parse_xml(value, resources_file)
+            root_el = parse_xml(value, resources)
         except Exception as e:
-            raise ValueError(f"in '{file_name}': {str(e)}")
+            raise ValueError(f"in '{filename}': {str(e)}")
         if not root_el:
-            raise ValueError(f"{file_name} is empty...")
-
-        value = root_el.to_str()
-
-        if not flags.no_header:
-            value = '<?xml version="1.0" encoding="utf-8"?>\n' + value
+            raise ValueError(f"{filename} is empty...")
 
         path = flags.output_dir
         if path[-1] != "/":
             path += "/"
-        path += file_name
-        if file_name[-4:] != ".xml":
-            path += ".xml"
+
+        filename = os.path.basename(filename)
+        if filename[-4:] != ".xml":
+            filename += ".xml"
+
+        if flags.rename_file and resources:
+            # escape . for regex
+            r_filename = filename.replace(".", "\\.")
+            mat = re.search(r"\n    resource 0x[a-f0-9]+ xml/([a-zA-Z][a-zA-Z_-]*)\n      \(\) \(file\) res/" + r_filename + " type=XML", resources)
+            if mat:
+                filename = mat.groups()[0] + ".xml"
+
+        path += filename
         with open(path, "w") as f:
-            f.write(value)
+            # add header
+            if not flags.no_header:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+
+            # generate rootstring
+            f.write(root_el.to_str())
+
         print(f"writing '{path}' ...")
 
 

@@ -8,19 +8,21 @@ xmltree2xml convert a compile xmltree from android to classic xml
 # Usage
 
 ```
-usage: xmltree2xml [-h] [-n NO_HEADER] [-o OUTPUT_DIR] file [file ...]
+usage: xmltree2xml [-h] [-n] [-r RESOURCES] [-o OUTPUT_DIR] [-f] file [file ...]
 
 convert android xmltree to classic xml.
 
 positional arguments:
-  file                  xmltree file
+  file                  xmltree file.
 
 options:
   -h, --help            show this help message and exit
-  -n NO_HEADER, --no-header NO_HEADER
-                        do not add an xml header.
+  -n, --no-header       do not add an xml header.
+  -r RESOURCES, --resources RESOURCES
+                        resource file for replace every hexa reference to human redable reference.
   -o OUTPUT_DIR, --output-dir OUTPUT_DIR
                         output directory.
+  -f, --rename-file     rename output file with resource name.
 ```
 
 ## Input file syntax
@@ -86,6 +88,39 @@ and output look like this
         <string-array name="mccmnc" />
     </pbundle_as_map>
 </list>
+```
+
+## Resource file
+
+With resource file the reference `@0x7f08013f` has converted to real value `@drawable/ic_shortcut_add_contact`.
+For dump resource file with android sdk
+
+```bash
+# android sdk
+aapt2 dump resource com.YOUR_APK.apk > resourcefile.txt
+
+#xmltree2xml
+xmltree2xml -r resourcefile LR.xmltree
+```
+
+#### Without
+
+```xml
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:icon="@0x7f08013f" android:enabled="true" android:shortcutId="dialer-shortcut-add-contact" android:shortcutShortLabel="@0x7f150287" android:shortcutLongLabel="@0x7f150286">
+      <intent android:action="android.intent.action.INSERT" android:data="content://com.android.contacts/contacts" />
+    </shortcut>
+</shortcuts>
+```
+
+#### with
+
+```xml
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:icon="@drawable/ic_shortcut_add_contact" android:enabled="true" android:shortcutId="dialer-shortcut-add-contact" android:shortcutShortLabel="@string/dialer_shortcut_add_contact_short" android:shortcutLongLabel="@string/dialer_shortcut_add_contact_long">
+        <intent android:action="android.intent.action.INSERT" android:data="content://com.android.contacts/contacts" />
+    </shortcut>
+</shortcuts>
 ```
 
 ## License
