@@ -4,7 +4,7 @@ import argparse
 import os
 import re
 
-ff = []
+
 class XmlTreeElement:
     """ xmltree implementation """
     def __init__(self, tag, text=None, child=[], attrs={}, extra={}):
@@ -38,19 +38,12 @@ class XmlTreeElement:
         self.attributes.update(attrs)
 
     def to_str(self, depth=0, indentation=4):
-        global ff
-
-        if self in ff:
-            print(self.tag, self.attributes)
-            # print(self.text, self.tag, self.attributes)
-            # exit(0)
-        ff.append(self)
         spance_indentation = " " * (depth * indentation)
 
         # convert attributes
         attrs = ""
         if self.attributes:
-            _a = [f'{key}="{str(value)}"' for key, value in self.attributes.items()]
+            _a = [f"{key}=\"{str(value)}\"" for key, value in self.attributes.items()]
             attrs = " " + " ".join(_a)
 
         # text element
@@ -68,15 +61,8 @@ class XmlTreeElement:
 
 
 def sanitize_string(val):
-    if val[0] == '"' and val[-1] == '"':
+    if val[0] == "\"" and val[-1] == "\"":
         return val[1:-1]
-    return val
-
-
-def sanitize_regex(val):
-    """espace special char"""
-    for c in ".?[](){}":
-        val = val.replace(c, f"\\{c}")
     return val
 
 
@@ -103,23 +89,23 @@ def sanitize_android_value(val, resources):
     # WARNING prefix "?" is unknow
     if resources:
         if val[0] in ["@", "?"]:
-            mat = re.search(r"\n    resource " + sanitize_regex(val[1:]) + r" ([^\s\n]+)\n", resources)
+            mat = re.search(r"\n    resource " + re.escape(val[1:]) + r" ([^\s\n]+)\n", resources)
             if mat:
                 if val[0] == "@":
                     return "@" + mat.groups()[0]
                 return "?android:" + mat.groups()[0]
         if val[0] == "?":
-            mat = re.search(r"\n\s{8}(.+?)\(0x[a-f0-9]+\)=" + sanitize_regex(val) + "\n", resources)
+            mat = re.search(r"\n\s{8}(.+?)\(0x[a-f0-9]+\)=" + re.escape(val) + "\n", resources)
             if mat:
                 return "?android:" + mat.groups()[0]
     return val
 
 
 elements = {
-    "E": re.compile(r"^(\s*)E: ([a-zA-Z][a-zA-Z0-9\-_\.]+) \(line=(\d+)\)\s*$"),
-    "A": re.compile(r"^(\s*)A: (.+?)=(.+?)(?: \(Raw: (.+)\))?\s*$"),
+    "E": re.compile(r"^(\s*)E: ([a-zA-Z][a-zA-Z0-9\-_\.]+?) \(line=(\d+)\)\s*$"),
+    "A": re.compile(r"^(\s*)A: (.+?)=(.+?)(?: \(Raw: (.+?)\))?\s*$"),
     "T": re.compile(r"^(\s*)T: (.+?)$"),
-    "N": re.compile(r"^(\s*)N: ([^\n\s=]+)=(.+?) \(line=(\d+)\)\s*$"),
+    "N": re.compile(r"^(\s*)N: ([^\n\s=]+?)=(.+?) \(line=(\d+?)\)\s*$"),
 }
 
 
@@ -184,10 +170,11 @@ def parse_xml(value, resources=None):
             if groups[2]:
                 extra["Raw"] = sanitize_string(groups[2])
 
-            key = sanitize_android_key(groups[0], resources)
-            value = sanitize_android_value(groups[1], resources)
-
-            tree[-1].add_attr(key, value, extra=extra)
+            tree[-1].add_attr(
+                sanitize_android_key(groups[0], resources),
+                sanitize_android_value(groups[1], resources),
+                extra=extra
+            )
 
         elif el_type == "T":
             tree[-1].set_text(groups[0])
@@ -204,6 +191,19 @@ def parse_xml(value, resources=None):
     return root
 
 
+def generate_path(output_dir, filename, resources):
+    filename = os.path.basename(filename)
+    if filename[-4:] != ".xml":
+        filename += ".xml"
+
+    # rename file wit resource name
+    if resources:
+        mat = re.search(r"\n\s{4}resource 0x[a-f0-9]+ xml/([a-zA-Z][a-zA-Z_-]*)\n\s{6}\(\) \(file\) res/" + re.escape(filename) + " type=XML", resources)
+        if mat:
+            filename = mat.groups()[0] + ".xml"
+    return output_dir + filename
+
+
 def main():
 
     p = argparse.ArgumentParser("xmltree2xml", description="convert android xmltree to classic xml.")
@@ -214,8 +214,10 @@ def main():
     p.add_argument("file", nargs='+', help="xmltree file.")
     flags = p.parse_args()
 
-    if not os.path.exists(flags.output_dir):
-        os.mkdir(flags.output_dir)
+    output_dir = os.path.normpath(flags.output_dir + "/")
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
     for filename in flags.file:
         with open(filename, "r") as f:
             value = f.read()
@@ -227,32 +229,15 @@ def main():
 
         try:
             root_el = parse_xml(value, resources)
+            if not root_el:
+                raise ValueError("file is empty...")
         except Exception as e:
-            raise ValueError(f"in '{filename}': {str(e)}")
-        if not root_el:
-            raise ValueError(f"{filename} is empty...")
+            raise ValueError(f"from '{filename}': {str(e)}")
 
-        path = flags.output_dir
-        if path[-1] != "/":
-            path += "/"
-
-        filename = os.path.basename(filename)
-        if filename[-4:] != ".xml":
-            filename += ".xml"
-
-        if flags.rename_file and resources:
-            # escape . for regex
-            mat = re.search(r"\n\s{4}resource 0x[a-f0-9]+ xml/([a-zA-Z][a-zA-Z_-]*)\n\s{6}\(\) \(file\) res/" + sanitize_regex(r_filename) + " type=XML", resources)
-            if mat:
-                filename = mat.groups()[0] + ".xml"
-
-        path += filename
+        path = generate_path(output_dir, filename, resources if flags.rename_file else None)
         with open(path, "w") as f:
-            # add header
             if not flags.no_header:
                 f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-
-            # generate rootstring
             f.write(root_el.to_str())
 
         print(f"writing '{path}' ...")

@@ -7,6 +7,8 @@ class TestParser(unittest.TestCase):
 
     def assertXmlTreeEqual(self, s, d):
 
+        self.assertIsInstance(s, XmlTreeElement)
+        self.assertIsInstance(d, XmlTreeElement)
         self.assertEqual(s.tag, d.tag)
         self.assertEqual(s.attributes, d.attributes)
         self.assertEqual(s.extra, d.extra)
@@ -35,11 +37,10 @@ class TestParser(unittest.TestCase):
             E: item (line=31)
               A: value=20826
 """
-        root = parse_xml(value)
-        self.assertIsInstance(root, XmlTreeElement)
+        root_origi = parse_xml(value)
 
-        l = XmlTreeElement("list", extra={"line": "16"})
-        l.add_attr("name", "carrier_config_list", extra={"Raw": "carrier_config_list"})
+        root_new = XmlTreeElement("list", extra={"line": "16"})
+        root_new.add_attr("name", "carrier_config_list", extra={"Raw": "carrier_config_list"})
 
         pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": "17"})
         c = XmlTreeElement("string-array", extra={"line": "19"})
@@ -50,7 +51,7 @@ class TestParser(unittest.TestCase):
 
         c.add_child(it)
         pbundle_as_map.add_child(c)
-        l.add_child(pbundle_as_map)
+        root_new.add_child(pbundle_as_map)
 
         pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": "24"})
         c = XmlTreeElement("string-array", extra={"line": "26"})
@@ -70,9 +71,9 @@ class TestParser(unittest.TestCase):
 
         pbundle_as_map.add_child(c)
 
-        l.add_child(pbundle_as_map)
+        root_new.add_child(pbundle_as_map)
 
-        self.assertXmlTreeEqual(root, l)
+        self.assertXmlTreeEqual(root_origi, root_new)
 
     def test_wrong_format_indente(self):
         value = " E: list (line=16)"
