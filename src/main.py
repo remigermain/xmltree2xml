@@ -3,6 +3,7 @@
 import argparse
 import os
 import re
+from functools import reduce
 
 
 class XmlTreeElement:
@@ -17,6 +18,7 @@ class XmlTreeElement:
         self.extra_attrs = {}
         self.extra = {**extra}
         self.childrens = [*child]
+        self.namespaces = {}
 
     def add_child(self, child):
         if self.text is not None:
@@ -34,6 +36,13 @@ class XmlTreeElement:
         self.extra_attrs[key] = extra
         self.attributes[key] = value
 
+    def add_namespace(self, key, value):
+        self.namespaces[f"xmls:{key}"] = value
+
+    def add_namespaces(self, **namespaces):
+        for key, val in namespaces.items():
+            self.add_namespace(key, val)
+
     def add_attrs(self, **attrs):
         self.attributes.update(attrs)
 
@@ -41,23 +50,18 @@ class XmlTreeElement:
         spance_indentation = " " * (depth * indentation)
 
         # convert attributes
-        attrs = ""
-        if self.attributes:
-            _a = [f"{key}=\"{str(value)}\"" for key, value in self.attributes.items()]
-            attrs = " " + " ".join(_a)
+        attrs = reduce(lambda fi, d: f"{fi} {d[0]}=\"{str(d[1])}\"", self.attributes.items(), "")
+        namespaces = reduce(lambda fi, d: f"{fi} {d[0]}=\"{str(d[1])}\"", self.namespaces.items(), "")
+        child = reduce(lambda fi, child: f"{fi}\n" + child.to_str(depth + 1, indentation), self.childrens, "")
 
-        # text element
+        start_tag = f"{spance_indentation}<{self.tag}{namespaces}{attrs}"
+        end_tag = f"</{self.tag}>"
+
         if self.text:
-            return f"{spance_indentation}<{self.tag}{attrs}>{self.text}</{self.tag}>"
-
-        # auto close tag
+            return f"{start_tag}>{self.text}{end_tag}"
         elif not self.childrens:
-            return f"{spance_indentation}<{self.tag}{attrs} />"
-
-        # convert child
-        _chil = [child.to_str(depth=depth + 1, indentation=indentation) for child in self.childrens]
-        childs = "\n".join(_chil)
-        return f"{spance_indentation}<{self.tag}{attrs}>\n{childs}\n{spance_indentation}</{self.tag}>"
+            return f"{start_tag} />"
+        return f"{start_tag}>{child}\n{spance_indentation}{end_tag}"
 
 
 def sanitize_string(val):
@@ -75,7 +79,7 @@ def sanitize_android_key(val, resources):
     mat = attr_reg.match(val)
     if mat:
         # 0 = url
-        # 1 = path ?
+        # 1 = namespace ?
         # 2 = hexa ?
         return mat.groups()[1]
     mat = attr_reg2.match(val)
@@ -84,23 +88,37 @@ def sanitize_android_key(val, resources):
     return val
 
 
+"""
+    Accessing resources from XML
+    @[<package_name>:]<resource_type>/<resource_name>
+
+    Referencing style attributes
+    ?[<package_name>:][<resource_type>/]<resource_name>
+
+"""
+
+
 def sanitize_android_value(val, resources):
     val = sanitize_string(val)
     # WARNING prefix "?" is unknow
     if resources:
-        if val[0] in ["@", "?"]:
-            mat = re.search(r"\n    resource " + re.escape(val[1:]) + r" ([^\s\n]+)\n", resources)
+        if val[0] == "@":
+            mat = re.search(r"\n\s{4}resource " + re.escape(val[1:]) + r" ([^\s\n]+)\n", resources)
             if mat:
-                if val[0] == "@":
-                    return "@" + mat.groups()[0]
-                return "?android:" + mat.groups()[0]
-        if val[0] == "?":
-            mat = re.search(r"\n\s{8}(.+?)\(0x[a-f0-9]+\)=" + re.escape(val) + "\n", resources)
+                return "@" + mat.groups()[0]
+        elif val[0] == "?":
+            mat = re.search(r"\n\s{4}resource 0x[a-f0-9]+ (.+?)\n\s{6}\(\) \(style\) size=\d+ parent=" + re.escape(val[1:]), resources)
             if mat:
                 return "?android:" + mat.groups()[0]
     return val
 
 
+"""
+    E: Element
+    A: Attribute
+    T: Text value
+    N: Namespace
+"""
 elements = {
     "E": re.compile(r"^(\s*)E: ([a-zA-Z][a-zA-Z0-9\-_\.]+?) \(line=(\d+)\)\s*$"),
     "A": re.compile(r"^(\s*)A: (.+?)=(.+?)(?: \(Raw: (.+?)\))?\s*$"),
@@ -123,9 +141,8 @@ def parse_xml(value, resources=None):
     root = None
     level = 0
 
-    # unknow N: type
-    is_android_special = 0
-    n_element = {}
+    namespaces_number = 0
+    namespaces = {}
 
     for pos, line in enumerate(value.split("\n"), start=1):
         if not line:
@@ -133,7 +150,7 @@ def parse_xml(value, resources=None):
 
         try:
             lvl, el_type, groups = parse_line(line)
-            lvl -= ((is_android_special % 2) * 2)
+            lvl -= ((namespaces_number % 2) * 2)
             mod = lvl % 4
             lvl //= 4
         except Exception as e:
@@ -156,10 +173,13 @@ def parse_xml(value, resources=None):
         if el_type == "E":
             xml_el = XmlTreeElement(groups[0], extra={"line": sanitize_string(groups[1])})
 
+            xml_el.add_namespaces(**namespaces)
+            namespaces = {}
+
             if len(tree) > 1 and level >= lvl:
                 tree = tree[:lvl]
             level = lvl
-            if not root:
+            if root is None:
                 root = xml_el
             else:
                 tree[-1].add_child(xml_el)
@@ -182,16 +202,14 @@ def parse_xml(value, resources=None):
         elif el_type == "N":
             if root:
                 raise ValueError("N type is aleready create")
-            is_android_special += 1
-            n_element[f"xmlns:{groups[0]}"] = sanitize_string(groups[1])
-
-    # add N attribute
-    root.add_attrs(**n_element)
+            namespaces_number += 1
+            namespaces[groups[0]] = sanitize_string(groups[1])
 
     return root
 
 
-def generate_path(output_dir, filename, resources):
+def generate_path(output_dir, filename, resources=None):
+
     filename = os.path.basename(filename)
     if filename[-4:] != ".xml":
         filename += ".xml"
@@ -201,7 +219,8 @@ def generate_path(output_dir, filename, resources):
         mat = re.search(r"\n\s{4}resource 0x[a-f0-9]+ xml/([a-zA-Z][a-zA-Z_-]*)\n\s{6}\(\) \(file\) res/" + re.escape(filename) + " type=XML", resources)
         if mat:
             filename = mat.groups()[0] + ".xml"
-    return output_dir + filename
+
+    return os.path.normpath(output_dir + "/" + filename)
 
 
 def main():
@@ -214,9 +233,8 @@ def main():
     p.add_argument("file", nargs='+', help="xmltree file.")
     flags = p.parse_args()
 
-    output_dir = os.path.normpath(flags.output_dir + "/")
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
+    if not os.path.exists(flags.output_dir):
+        os.mkdir(flags.output_dir)
 
     for filename in flags.file:
         with open(filename, "r") as f:
@@ -234,7 +252,7 @@ def main():
         except Exception as e:
             raise ValueError(f"from '{filename}': {str(e)}")
 
-        path = generate_path(output_dir, filename, resources if flags.rename_file else None)
+        path = generate_path(flags.output_dir, filename, resources if flags.rename_file else None)
         with open(path, "w") as f:
             if not flags.no_header:
                 f.write('<?xml version="1.0" encoding="utf-8"?>\n')

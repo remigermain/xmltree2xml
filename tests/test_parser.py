@@ -141,3 +141,41 @@ class TestParser(unittest.TestCase):
         value = """E: list (line=16)\n  T: value="TEST" (Raw: "TEST")"""
         with self.assertRaises(ValueError):
             parse_xml(value)
+
+
+class TestParserAndroidReference(unittest.TestCase):
+    def test_with_namespace(self):
+        value = """N: android=http://schemas.android.com/apk/res/android (line=15)
+  E: PreferenceScreen (line=19)
+    A: http://schemas.android.com/apk/res/android:title(0x010101e1)=@0x7f1502b8
+      E: ListPreference (line=22)
+        A: http://schemas.android.com/apk/res/android:entries(0x010100b2)=@0x7f03000e
+        A: http://schemas.android.com/apk/res/android:title(0x010101e1)=@0x7f1502b5
+        A: http://schemas.android.com/apk/res/android:key(0x010101e8)=@0x7f1502b6
+        A: http://schemas.android.com/apk/res/android:summary(0x010101e9)="%s" (Raw: "%s")
+        A: http://schemas.android.com/apk/res/android:defaultValue(0x010101ed)=@0x7f1502b4
+        A: http://schemas.android.com/apk/res/android:dialogTitle(0x010101f2)=@0x7f1502b5
+        A: http://schemas.android.com/apk/res/android:entryValues(0x010101f8)=@0x7f03000f
+      E: ListPreference (line=31)
+        A: http://schemas.android.com/apk/res/android:entries(0x010100b2)=@0x7f03000c
+        A: http://schemas.android.com/apk/res/android:title(0x010101e1)=@0x7f1502bd
+        A: http://schemas.android.com/apk/res/android:key(0x010101e8)=@0x7f1502be
+        A: http://schemas.android.com/apk/res/android:summary(0x010101e9)="%s" (Raw: "%s")
+        A: http://schemas.android.com/apk/res/android:defaultValue(0x010101ed)=@0x7f1502bc
+        A: http://schemas.android.com/apk/res/android:dialogTitle(0x010101f2)=@0x7f1502bd
+        A: http://schemas.android.com/apk/res/android:entryValues(0x010101f8)=@0x7f03000d
+      E: ListPreference (line=40)
+        A: http://schemas.android.com/apk/res/android:title(0x010101e1)=@0x7f150604
+        A: http://schemas.android.com/apk/res/android:key(0x010101e8)=@0x7f1502b7
+        A: http://schemas.android.com/apk/res/android:summary(0x010101e9)="%s" (Raw: "%s")
+        A: http://schemas.android.com/apk/res/android:dialogTitle(0x010101f2)=@0x7f150604"""
+
+        root = parse_xml(value)
+
+        expected = """<PreferenceScreen xmls:android="http://schemas.android.com/apk/res/android" android:title="@0x7f1502b8">
+    <ListPreference android:entries="@0x7f03000e" android:title="@0x7f1502b5" android:key="@0x7f1502b6" android:summary="%s" android:defaultValue="@0x7f1502b4" android:dialogTitle="@0x7f1502b5" android:entryValues="@0x7f03000f" />
+    <ListPreference android:entries="@0x7f03000c" android:title="@0x7f1502bd" android:key="@0x7f1502be" android:summary="%s" android:defaultValue="@0x7f1502bc" android:dialogTitle="@0x7f1502bd" android:entryValues="@0x7f03000d" />
+    <ListPreference android:title="@0x7f150604" android:key="@0x7f1502b7" android:summary="%s" android:dialogTitle="@0x7f150604" />
+</PreferenceScreen>"""
+
+        self.assertEqual(expected, root.to_str())

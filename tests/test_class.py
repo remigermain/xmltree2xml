@@ -13,6 +13,11 @@ class TestXmlClass(unittest.TestCase):
         c.add_attr("kfffey", "value9595")
         self.assertEqual(c.attributes, {"kfffey": "value9595"})
 
+    def test_namespace(self):
+        c = XmlTreeElement("isatag")
+        c.add_namespace("key", "value")
+        self.assertEqual({"xmls:key": "value"}, c.namespaces)
+
     def test_text(self):
         c = XmlTreeElement("isatag")
         c.set_text("is a text")
