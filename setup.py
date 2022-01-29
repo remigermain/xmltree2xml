@@ -5,18 +5,24 @@ import os
 import sys
 
 
-version = "0.1.0"
+version = "0.1.1"
 
 if sys.argv[-1] == 'publish':
+
+    if os.system("pip freeze | grep build"):
+        print("build not installed.\nUse `pip install build`.\nExiting.")
+        sys.exit()
     if os.system("pip freeze | grep twine"):
         print("twine not installed.\nUse `pip install twine`.\nExiting.")
         sys.exit()
-    os.system('rm -rf dist xmltree2xml.egg-info')
-    os.system("python setup.py sdist")
-    if os.system("twine check dist/*"):
-        print("twine check failed. Packages might be outdated.")
-        print("Try using `pip install -U twine wheel`.\nExiting.")
+
+    os.system("rm -rf dist/*")
+    os.system("mkdir -p dist")
+
+    if os.system("python -m build"):
+        print("build failed...")
         sys.exit()
+
     os.system("twine upload dist/*")
     sys.exit()
 
@@ -51,6 +57,7 @@ setuptools.setup(
     packages=["xmltree2xml"],
     python_requires=">=3.6",
     entry_points={
-        "entry_points": "app=xmltree2xml.main:main"
+        "entry_points": "xmltree2xml=xmltree2xml.main:main",
+        "console_scripts": "xmltree2xml=xmltree2xml.main:main"
     }
 )
