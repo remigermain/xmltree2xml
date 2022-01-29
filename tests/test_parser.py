@@ -1,6 +1,6 @@
 import unittest
 
-from ..src.main import XmlTreeElement, parse_xml
+from ..xmltree2xml.main import XmlTreeElement, parse_xml
 
 
 class TestParser(unittest.TestCase):

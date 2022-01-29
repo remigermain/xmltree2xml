@@ -1,4 +1,4 @@
-from ..src.main import sanitize_string, generate_path
+from ..xmltree2xml.main import sanitize_string, generate_path
 import unittest
 
 

@@ -11,7 +11,7 @@ if sys.argv[-1] == 'publish':
     if os.system("pip freeze | grep twine"):
         print("twine not installed.\nUse `pip install twine`.\nExiting.")
         sys.exit()
-    os.system('rm -rf dist nested_multipart_parser.egg-info')
+    os.system('rm -rf dist xmltree2xml.egg-info')
     os.system("python setup.py sdist")
     if os.system("twine check dist/*"):
         print("twine check failed. Packages might be outdated.")
@@ -51,6 +51,6 @@ setuptools.setup(
     packages=["xmltree2xml"],
     python_requires=">=3.6",
     entry_points={
-        "entry_points": "app=src.main:main"
+        "entry_points": "app=xmltree2xml.main:main"
     }
 )

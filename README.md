@@ -93,14 +93,13 @@ and output look like this
 ## Resource file
 
 With resource file the reference `@0x7f08013f` has converted to real value `@drawable/ic_shortcut_add_contact`.
-For dump resource file with android sdk
 
 ```bash
-# android sdk
-aapt2 dump resource com.YOUR_APK.apk > resourcefile.txt
+#  dump resource file with android sdk
+aapt2 dump resource YOUR_APK > resourcefile.txt
 
 #xmltree2xml
-xmltree2xml -r resourcefile LR.xmltree
+xmltree2xml -r resourcefile.txt LR.xmltree
 ```
 
 #### Without

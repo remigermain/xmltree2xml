@@ -1,5 +1,5 @@
 import unittest
-from ..src.main import parse_line
+from ..xmltree2xml.main import parse_line
 
 
 class TestParseLine(unittest.TestCase):
