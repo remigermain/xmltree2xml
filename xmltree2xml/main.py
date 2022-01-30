@@ -19,17 +19,19 @@ class XmlTreeElement:
         self.extra = {**extra}
         self.childrens = [*child]
         self.namespaces = {}
+        self.parent = None
 
     def add_child(self, child):
         if self.text is not None:
-            raise ValueError("error can't set child with text value")
+            raise ValueError("can't add children text is set")
         self.childrens.append(child)
+        child.parent = self
 
     def set_text(self, text):
         if len(self.childrens) != 0:
-            raise ValueError("error can't set text with childs")
+            raise ValueError("can't set text with children")
         elif self.text:
-            raise ValueError("error can't set text with text set")
+            raise ValueError("text is already set")
         self.text = text
 
     def add_attr(self, key, value, extra={}):
@@ -49,9 +51,14 @@ class XmlTreeElement:
     def to_str(self, depth=0, indentation=4):
         spance_indentation = " " * (depth * indentation)
 
+        def to_val(val):
+            if isinstance(val, bool):
+                val = str(val).lower()
+            return f"\"{val}\""
+
         # convert attributes
-        attrs = reduce(lambda fi, d: f"{fi} {d[0]}=\"{str(d[1])}\"", self.attributes.items(), "")
-        namespaces = reduce(lambda fi, d: f"{fi} {d[0]}=\"{str(d[1])}\"", self.namespaces.items(), "")
+        attrs = reduce(lambda fi, d: f"{fi} {d[0]}={to_val(d[1])}", self.attributes.items(), "")
+        namespaces = reduce(lambda fi, d: f"{fi} {d[0]}={to_val(d[1])}", self.namespaces.items(), "")
         child = reduce(lambda fi, child: f"{fi}\n" + child.to_str(depth + 1, indentation), self.childrens, "")
 
         start_tag = f"{spance_indentation}<{self.tag}{namespaces}{attrs}"
@@ -64,9 +71,26 @@ class XmlTreeElement:
         return f"{start_tag}>{child}\n{spance_indentation}{end_tag}"
 
 
-def sanitize_string(val):
+def sanitize_value(val):
+    # convert string
     if val[0] == "\"" and val[-1] == "\"":
+        # remove start and ending quote
         return val[1:-1]
+
+    # convert boolean
+    elif val == "true":
+        return True
+    elif val == "false":
+        return False
+
+    # convert to float or int
+    try:
+        if '.' in val:
+            return float(val)
+        return int(val)
+    except ValueError:
+        pass
+
     return val
 
 
@@ -99,9 +123,8 @@ def sanitize_android_key(val, resources):
 
 
 def sanitize_android_value(val, resources):
-    val = sanitize_string(val)
-    # WARNING prefix "?" is unknow
-    if resources:
+    val = sanitize_value(val)
+    if resources and isinstance(val, str):
         if val[0] == "@":
             mat = re.search(r"\n\s{4}resource " + re.escape(val[1:]) + r" ([^\s\n]+)\n", resources)
             if mat:
@@ -171,7 +194,7 @@ def parse_xml(value, resources=None):
             raise ValueError(f"multiple root element in line {pos}")
 
         if el_type == "E":
-            xml_el = XmlTreeElement(groups[0], extra={"line": sanitize_string(groups[1])})
+            xml_el = XmlTreeElement(groups[0], extra={"line": sanitize_value(groups[1])})
 
             xml_el.add_namespaces(**namespaces)
             namespaces = {}
@@ -188,7 +211,7 @@ def parse_xml(value, resources=None):
         elif el_type == "A":
             extra = {}
             if groups[2]:
-                extra["Raw"] = sanitize_string(groups[2])
+                extra["Raw"] = sanitize_value(groups[2])
 
             tree[-1].add_attr(
                 sanitize_android_key(groups[0], resources),
@@ -200,10 +223,11 @@ def parse_xml(value, resources=None):
             tree[-1].set_text(groups[0])
 
         elif el_type == "N":
+            # WARNING namespace is only on top documents ?
             if root:
                 raise ValueError("N type is aleready create")
             namespaces_number += 1
-            namespaces[groups[0]] = sanitize_string(groups[1])
+            namespaces[groups[0]] = sanitize_value(groups[1])
 
     return root
 

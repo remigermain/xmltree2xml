@@ -17,6 +17,8 @@ class TestParser(unittest.TestCase):
         self.assertEqual(len(s.childrens), len(d.childrens))
         if s.childrens:
             for child_s, child_d in zip(s.childrens, d.childrens):
+                self.assertEqual(child_s.parent, s)
+                self.assertEqual(child_d.parent, d)
                 self.assertXmlTreeEqual(child_s, child_d)
 
     def test_parse(self):
@@ -39,34 +41,34 @@ class TestParser(unittest.TestCase):
 """
         root_origi = parse_xml(value)
 
-        root_new = XmlTreeElement("list", extra={"line": "16"})
+        root_new = XmlTreeElement("list", extra={"line": 16})
         root_new.add_attr("name", "carrier_config_list", extra={"Raw": "carrier_config_list"})
 
-        pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": "17"})
-        c = XmlTreeElement("string-array", extra={"line": "19"})
+        pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": 17})
+        c = XmlTreeElement("string-array", extra={"line": 19})
         c.add_attr("name", "mccmnc", extra={"Raw": "mccmnc"})
 
-        it = XmlTreeElement("item", extra={"line": "20"})
+        it = XmlTreeElement("item", extra={"line": 20})
         it.add_attr("value", "TEST", extra={"Raw": "TEST"})
 
         c.add_child(it)
         pbundle_as_map.add_child(c)
         root_new.add_child(pbundle_as_map)
 
-        pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": "24"})
-        c = XmlTreeElement("string-array", extra={"line": "26"})
+        pbundle_as_map = XmlTreeElement("pbundle_as_map", extra={"line": 24})
+        c = XmlTreeElement("string-array", extra={"line": 26})
         c.add_attr("name", "mccmnc", extra={"Raw": "mccmnc"})
 
-        it = XmlTreeElement("item", extra={"line": "28"})
-        it.add_attr("value", "20601")
+        it = XmlTreeElement("item", extra={"line": 28})
+        it.add_attr("value", 20601)
         c.add_child(it)
 
-        it = XmlTreeElement("item", extra={"line": "30"})
-        it.add_attr("value", "20810")
+        it = XmlTreeElement("item", extra={"line": 30})
+        it.add_attr("value", 20810)
         c.add_child(it)
 
-        it = XmlTreeElement("item", extra={"line": "31"})
-        it.add_attr("value", "20826")
+        it = XmlTreeElement("item", extra={"line": 31})
+        it.add_attr("value", 20826)
         c.add_child(it)
 
         pbundle_as_map.add_child(c)
@@ -142,6 +144,29 @@ class TestParser(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_xml(value)
 
+    def test_with_boolean(self):
+        value = """E: div (line=44)\n  A: value=true"""
+
+        expected = XmlTreeElement("div", extra={"line": 44})
+        expected.add_attr("value", True)
+
+        root = parse_xml(value)
+        self.assertXmlTreeEqual(expected, root)
+
+        expected_str = "<div value=\"true\" />"
+        self.assertEqual(root.to_str(), expected_str)
+
+    def test_with_boolean_false(self):
+        value = """E: div (line=44)\n  A: value=false"""
+
+        expected = XmlTreeElement("div", extra={"line": 44})
+        expected.add_attr("value", False)
+
+        root = parse_xml(value)
+        self.assertXmlTreeEqual(expected, root)
+
+        expected_str = "<div value=\"false\" />"
+        self.assertEqual(root.to_str(), expected_str)
 
 class TestParserAndroidReference(unittest.TestCase):
     def test_with_namespace(self):

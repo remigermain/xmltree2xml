@@ -1,15 +1,25 @@
-from ..xmltree2xml.main import sanitize_string, generate_path
+from ..xmltree2xml.main import sanitize_value, generate_path
 import unittest
 
 
 class TestSanitizeFunction(unittest.TestCase):
-    def test_sanitize_string(self):
-        self.assertEqual('bonjour ca va', sanitize_string('"bonjour ca va"'))
+    def test_sanitize_value(self):
+        self.assertEqual('bonjour ca va', sanitize_value('"bonjour ca va"'))
         # missing end quote
-        self.assertEqual('bonjour ca va"', sanitize_string('bonjour ca va"'))
-        self.assertEqual('"bonjour ca va', sanitize_string('"bonjour ca va'))
+        self.assertEqual('bonjour ca va"', sanitize_value('bonjour ca va"'))
+        self.assertEqual('"bonjour ca va', sanitize_value('"bonjour ca va'))
         # no remove '
-        self.assertEqual("'bonjour ca va'", sanitize_string("'bonjour ca va'"))
+        self.assertEqual("'bonjour ca va'", sanitize_value("'bonjour ca va'"))
+
+        # int
+        self.assertEqual("554", sanitize_value("\"554\""))
+        self.assertEqual(554, sanitize_value("554"))
+        self.assertEqual(-554, sanitize_value("-554"))
+        self.assertEqual("-5d54", sanitize_value("-5d54"))
+        self.assertEqual(-5.54, sanitize_value("-5.54"))
+        # bool
+        self.assertEqual(True, sanitize_value("true"))
+        self.assertEqual(False, sanitize_value("false"))
 
     def test_generate_path_without_extention(self):
         self.assertEqual("dir/file.xml", generate_path("dir/", "file", None))
