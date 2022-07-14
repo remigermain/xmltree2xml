@@ -39,7 +39,7 @@ class XmlTreeElement:
         self.attributes[key] = value
 
     def add_namespace(self, key, value):
-        self.namespaces[f"xmls:{key}"] = value
+        self.namespaces[f"xmlns:{key}"] = value
 
     def add_namespaces(self, **namespaces):
         for key, val in namespaces.items():
