@@ -16,7 +16,7 @@ class TestXmlClass(unittest.TestCase):
     def test_namespace(self):
         c = XmlTreeElement("isatag")
         c.add_namespace("key", "value")
-        self.assertEqual({"xmls:key": "value"}, c.namespaces)
+        self.assertEqual({"xmlns:key": "value"}, c.namespaces)
 
     def test_text(self):
         c = XmlTreeElement("isatag")
