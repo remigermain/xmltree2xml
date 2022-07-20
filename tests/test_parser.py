@@ -197,7 +197,7 @@ class TestParserAndroidReference(unittest.TestCase):
 
         root = parse_xml(value)
 
-        expected = """<PreferenceScreen xmls:android="http://schemas.android.com/apk/res/android" android:title="@0x7f1502b8">
+        expected = """<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" android:title="@0x7f1502b8">
     <ListPreference android:entries="@0x7f03000e" android:title="@0x7f1502b5" android:key="@0x7f1502b6" android:summary="%s" android:defaultValue="@0x7f1502b4" android:dialogTitle="@0x7f1502b5" android:entryValues="@0x7f03000f" />
     <ListPreference android:entries="@0x7f03000c" android:title="@0x7f1502bd" android:key="@0x7f1502be" android:summary="%s" android:defaultValue="@0x7f1502bc" android:dialogTitle="@0x7f1502bd" android:entryValues="@0x7f03000d" />
     <ListPreference android:title="@0x7f150604" android:key="@0x7f1502b7" android:summary="%s" android:dialogTitle="@0x7f150604" />
