@@ -1,5 +1,6 @@
 # xmltree2xml
 
+[![CI](https://github.com/remigermain/xmltree2xml/actions/workflows/main.yml/badge.svg)](https://github.com/remigermain/xmltree2xml/actions/workflows/main.yml)
 [![pypi](https://img.shields.io/pypi/v/xmltree2xml)](https://pypi.org/project/xmltree2xml/)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/xmltree2xml)
 
