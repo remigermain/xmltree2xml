@@ -1,4 +1,4 @@
-name: python xmltree2xml
+name: tests
 
 on:
   push:
