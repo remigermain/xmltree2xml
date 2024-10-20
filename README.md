@@ -1,5 +1,6 @@
 # xmltree2xml
 
+<a href="https://u8views.com/github/remigermain"><img src="https://u8views.com/api/v1/github/profiles/66946113/views/day-week-month-total-count.svg" width="1px" height="1px"></a>
 [![CI](https://github.com/remigermain/xmltree2xml/actions/workflows/main.yml/badge.svg)](https://github.com/remigermain/xmltree2xml/actions/workflows/main.yml)
 [![pypi](https://img.shields.io/pypi/v/xmltree2xml)](https://pypi.org/project/xmltree2xml/)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/xmltree2xml)
